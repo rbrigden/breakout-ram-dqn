@@ -20,6 +20,10 @@ def send(subject="Training Update",
     server.login(fromaddr, os.environ["GM_PASS"])
 
     for person in to:
+        fromaddr = os.environ["GM_ADDRESS"]
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(fromaddr, os.environ["GM_PASS"])
         msg = MIMEMultipart()
 
         msg['From'] = fromaddr
