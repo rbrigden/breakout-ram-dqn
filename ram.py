@@ -50,6 +50,7 @@ for e in range(EPISODES):
     explored_actions = empty_arr(6)
     # start inner loop
     terminated = False
+    print "Updates: {}".format(updates)
     while not terminated:
 
         env.render()
@@ -77,7 +78,7 @@ for e in range(EPISODES):
             samples = agent.sample(BATCHSIZE)
 
             # Compute a mask of non-final states and concatenate the batch elements
-            non_final_mask = torch.Tensor(tuple(map(lambda e: e.term is False, samples))).type(btype)
+            non_final_mask = torch.Tensor(tuple(map(lambda e: e.term is False, samples))).type(torch.ByteTensor)
 
             # We don't want to backprop through the expected action values and volatile
             # will save us on temporarily changing the model parameters'
@@ -89,9 +90,11 @@ for e in range(EPISODES):
             action_batch = Variable(torch.from_numpy(np.array([e.a for e in samples])).type(ltype))
             reward_batch = Variable(torch.from_numpy(np.array([e.r for e in samples])).type(dtype))
             state_action_values = Q(state_batch).gather(1, action_batch.unsqueeze(1))
-            next_state_values = Variable(torch.zeros(BATCHSIZE))
+            next_state_values = Variable(torch.zeros(BATCHSIZE)).cpu()
             next_state_values[non_final_mask] = Q(non_final_next_states).max(1)[0]
             next_state_values.volatile = False
+            if USE_CUDA:
+                next_state_values.cuda()
             expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
             loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
@@ -101,6 +104,7 @@ for e in range(EPISODES):
             for param in Q.parameters():
                 param.grad.data.clamp_(-1, 1)
             optimizer.step()
+            updates += 1
 
         s = ns
         frames_seen += 1
