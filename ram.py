@@ -20,7 +20,6 @@ class Variable(autograd.Variable):
 
 # MODELS
 Q = DQN_RAM().cuda() if USE_CUDA else DQN_RAM()
-Q_hat = copy.deepcopy(Q)
 optimizer = torch.optim.RMSprop(Q.parameters())
 updates = 0
 
@@ -68,45 +67,40 @@ for e in range(EPISODES):
 
         # we only add the q approx to the reward for terminal states
         # mask must be 0 in the terminal state case only
-        agent.remember(s, action, r, ns, int(not terminated))
+        agent.remember(s, action, r, ns, terminated)
 
         # sample from B
         if (frames_seen > BATCHSIZE):
             # print "Updating"
             samples = agent.sample(BATCHSIZE)
-            next_states = Variable(torch.cat([e.ns.view(1, 128) for e in samples]))
-            curr_states = Variable(torch.cat([e.s.view(1, 128) for e in samples]))
-            curr_rewards = np.array([ e.r for e in samples ])
-            curr_actions = np.array([ e.a for e in samples ])
 
-            term_mask = np.array([e.term for e in samples])
-            curr_rewards = Variable(torch.from_numpy(curr_rewards).type(dtype))
-            curr_actions = Variable(torch.from_numpy(curr_actions).type(ltype))
-            term_mask = Variable(torch.from_numpy(term_mask).type(dtype))
-
+            # Compute a mask of non-final states and concatenate the batch elements
+            non_final_mask = torch.ByteTensor(
+                tuple(map(lambda e: e.term is False, samples)))
             if USE_CUDA:
-                curr_actions = curr_actions.cuda()
-                curr_rewards = curr_rewards.cuda()
-                term_mask = term_mask.cuda()
+                non_final_mask = non_final_mask.cuda()
+            # We don't want to backprop through the expected action values and volatile
+            # will save us on temporarily changing the model parameters'
+            # requires_grad to False!
+            non_final_next_states = Variable(torch.stack([e.ns for e in samples
+                                                        if e.term is False], 0),
+                                             volatile=True)
+            state_batch = Variable(torch.stack(tuple([e.s for e in samples]), 0))
+            action_batch = Variable(torch.from_numpy(np.array([e.a for e in samples])).type(ltype))
+            reward_batch = Variable(torch.from_numpy(np.array([e.r for e in samples])).type(dtype))
+            state_action_values = Q(state_batch).gather(1, action_batch.unsqueeze(1))
+            next_state_values = Variable(torch.zeros(BATCHSIZE))
+            next_state_values[non_final_mask] = Q(non_final_next_states).max(1)[0]
+            next_state_values.volatile = False
+            expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-            curr_state_qs = Q(curr_states).gather(1, curr_actions.unsqueeze(1))
-            next_state_qs = Q_hat(next_states).detach().max(1)[0]
-            targets = torch.add(curr_rewards, (GAMMA * (term_mask * next_state_qs)))
-            # err = (targets - curr_state_qs) # MSELoss
-            loss = F.smooth_l1_loss(curr_state_qs, targets)
-            # print loss
-            # Forward + Backward + Optimize
+            loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
+
             optimizer.zero_grad()
             loss.backward()
             for param in Q.parameters():
                 param.grad.data.clamp_(-1, 1)
             optimizer.step()
-            updates += 1
-
-
-            if (updates % SWAPRATE == 0):
-                print "swap!"
-                Q_hat.load_state_dict(Q.state_dict())
 
         s = ns
         frames_seen += 1
