@@ -9,6 +9,8 @@ if USE_CUDA:
     print "it's CUDA bitch"
 dtype = torch.cuda.FloatTensor if USE_CUDA else torch.FloatTensor
 ltype = torch.cuda.LongTensor if USE_CUDA else torch.LongTensor
+btype = torch.cuda.ByteTensor if USE_CUDA else torch.ByteTensor
+
 
 
 class Variable(autograd.Variable):
@@ -75,10 +77,8 @@ for e in range(EPISODES):
             samples = agent.sample(BATCHSIZE)
 
             # Compute a mask of non-final states and concatenate the batch elements
-            non_final_mask = torch.ByteTensor(
-                tuple(map(lambda e: e.term is False, samples)))
-            if USE_CUDA:
-                non_final_mask = non_final_mask.cuda()
+            non_final_mask = torch.Tensor(tuple(map(lambda e: e.term is False, samples))).type(btype)
+
             # We don't want to backprop through the expected action values and volatile
             # will save us on temporarily changing the model parameters'
             # requires_grad to False!
