@@ -123,8 +123,10 @@ while updates < EPOCH_SIZE * EPOCHS:
             next_state_values[non_final_mask] = Q(non_final_next_states).max(1)[0]
             next_state_values.volatile = False
             if USE_CUDA:
-                next_state_values.cuda()
-            expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+                expected_state_action_values = (next_state_values.cuda() * GAMMA) + reward_batch
+            else:
+                expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
 
             loss = F.smooth_l1_loss(state_action_values, expected_state_action_values)
 
