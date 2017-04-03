@@ -10,6 +10,8 @@ import torch.autograd as autograd
 import torch.nn.functional as F
 from torch.autograd import Variable
 from hyperparams import *
+import notify
+import json
 
 dtype = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
 

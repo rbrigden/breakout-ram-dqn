@@ -2,6 +2,8 @@ import gym
 import copy
 import time
 from util import *
+from datetime import datetime
+
 
 # CUDA Support
 USE_CUDA = torch.cuda.is_available()
@@ -34,10 +36,37 @@ episode_actions = empty_arr(6)
 explored_actions = empty_arr(6)
 episode_reward = 0
 episode_rewards = []
-for e in range(EPISODES):
-    print "\nEpisode {} begun".format(e)
+episodes = 0
+episode = 0
+epoch = 0
+estart = datetime.now()
+while updates < EPOCH_SIZE * EPOCHS:
+    print "\nEpisode {} begun".format(episode)
+    episode += 1
     epsilon = EPSILON_END + (EPSILON_START - EPSILON_END) * \
     math.exp(-1. * actions_taken / EPSILON_DECAY)
+    if updates % EPOCH_SIZE == 0:
+        ed = str(datetime.now() - estart)
+        estart = datetime.now()
+    if updates % (NOTIFY_RATE * EPOCH_SIZE) == 0:
+        with open('notify_receivers.json') as data_file:
+            receivers = json.load(data_file)
+        curr_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        subject = "Training Update Epoch {}".format(epoch)
+        body = "Just updating you on the training process. The time is\
+        {} and I will update you every {} epochs. {} more to go!\
+        Here are some stats to let you know how well I am doing:".format(\
+        curr_time, NOTIFY_RATE, EPOCHS - epoch)
+        data = {"Mean reward":np.mean(episode_rewards),
+                "Median reard":np.median(episode_rewards),
+                "Raw rewards by episode":episode_rewards,
+                "Last epoch duration":ed}
+
+        notify.send(subject=subject,
+                    data = data,
+                    body = body,
+                    to = receivers["emails"])
+        epoch += 1
     # first frame
     x = env.reset()
     s = torch.from_numpy(x).type(dtype)
